@@ -1,12 +1,11 @@
 import { computed, ref, watch } from 'vue';
 
 export enum MapStyle {
-  OS_MAP = 'OS_MAP',
   MAPBOX = 'MAPBOX',
 }
 
 const localStorageMapStyleKey = 'gpx-library-map-style';
-const mapStyles = [MapStyle.OS_MAP, MapStyle.MAPBOX];
+const mapStyles = [MapStyle.MAPBOX];
 
 const cachedMapStyleIndex = mapStyles.indexOf(
   localStorage.getItem(localStorageMapStyleKey) as MapStyle,

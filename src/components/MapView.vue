@@ -5,15 +5,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, useCssModule, watc
 import {
   addLayersToMap,
   applyWalks,
-  greaterBounds,
   mapboxToken,
   MapSourceLayer,
   useMapSelection,
 } from '@/utils/map';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { useRouter } from 'vue-router';
-import { addOsAttribution, osKey, overrideOsMap, ukBounds } from '@/utils/os-map';
-import MaterialIcon from './MaterialIcon.vue';
 import { MapStyle, useMapStyle } from '@/utils/map-style';
 
 declare global {
@@ -23,7 +19,6 @@ declare global {
 }
 
 const mapStyleUrls: Record<MapStyle, string> = {
-  [MapStyle.OS_MAP]: 'https://api.os.uk/maps/vector/v1/vts/resources/styles?srs=3857&key=' + osKey,
   [MapStyle.MAPBOX]: '/mapbox-style.json',
 };
 </script>
@@ -42,8 +37,6 @@ const { walks = [], hoveredPoint } = defineProps<{
 }>();
 
 const selectedWalks = computed(() => walks.filter((walk) => walk.id === selected.value));
-
-const router = useRouter();
 
 const style = useCssModule();
 
@@ -82,16 +75,9 @@ if (!window.cachedMapElement) {
 const map = window.cachedMapElement;
 
 const topRight = map.getContainer().querySelector(`.mapboxgl-ctrl-top-right`);
-const bottomLeft = map.getContainer().querySelector(`.mapboxgl-ctrl-bottom-left`);
 
 const resize = () => {
   map.resize();
-  if (mapStyle.value === MapStyle.OS_MAP) {
-    const newBounds = greaterBounds(ukBounds, map);
-    map.setMaxBounds(newBounds);
-  } else {
-    map.setMaxBounds(null as never); // Remove the max bounds
-  }
 };
 
 onMounted(() => {
@@ -113,33 +99,12 @@ map.on('dblclick', (ev) => {
   dblclick(ev);
 });
 
-const osMapSourcedataHandler = (e: mapboxgl.MapSourceDataEvent) => {
-  if (e.sourceId === 'esri') {
-    map.off('sourcedata', osMapSourcedataHandler);
-    overrideOsMap(map);
-  }
-};
-
-watch(mapStyle, (mapStyle) => {
-  map.setStyle(mapStyleUrls[mapStyle]);
-});
-
 watch(
   mapStyle,
-  (mapStyle) => {
+  () => {
     map.once('style.load', () => {
       mapLoaded(map);
-
-      if (mapStyle === MapStyle.OS_MAP) {
-        overrideOsMap(map);
-      }
     });
-
-    if (mapStyle === MapStyle.OS_MAP) {
-      map.on('sourcedata', osMapSourcedataHandler);
-    } else {
-      map.off('sourcedata', osMapSourcedataHandler);
-    }
   },
   { immediate: true },
 );
@@ -164,7 +129,6 @@ watch(selectedWalks, (selectedWalks) => {
 
 const mapLoaded = (map: mapboxgl.Map) => {
   resize();
-  addOsAttribution(map);
   addLayersToMap(map);
 
   applyWalks(map, walks, MapSourceLayer.LINES);
@@ -196,10 +160,7 @@ const flyToSelection = () => {
 const { click } = useMapSelection({
   getExternalSelection: () => selected.value,
   flyToSelection,
-  emitUpdate: (newSelected) => {
-    if (newSelected) void router.replace({ name: 'Walk', params: { id: newSelected } });
-    else void router.replace({ name: 'MapPage' });
-  },
+  emitUpdate: () => undefined,
 });
 
 function dblclick(e: mapboxgl.MapMouseEvent) {
@@ -230,14 +191,6 @@ watch(
 
 <template>
   <div ref="container" :class="$style.mapContainer"></div>
-  <Teleport :to="bottomLeft">
-    <a
-      v-if="mapStyle === MapStyle.OS_MAP"
-      href="https://www.ordnancesurvey.co.uk/"
-      target="_blank"
-      :class="['mapboxgl-ctrl', $style.osLogo]"
-    ></a>
-  </Teleport>
   <Teleport :to="topRight">
     <div class="mapboxgl-ctrl mapboxgl-ctrl-group">
       <button @click="nextMapStyle">
@@ -269,17 +222,6 @@ watch(
     stroke: white;
     stroke-width: 20;
   }
-}
-
-.osLogo {
-  width: 90px;
-  height: 24px;
-  background-image: url(https://labs.os.uk/public/os-api-branding/v0.3.1/img/os-logo-maps.svg);
-  // background-image: url(https://labs.os.uk/public/os-api-branding/v0.3.1/img/os-logo-maps-white.svg);
-  background-size: 90px 24px;
-  background-position: center;
-  background-repeat: no-repeat;
-  box-sizing: content-box;
 }
 
 :global(.mapboxgl-ctrl-bottom-right) {

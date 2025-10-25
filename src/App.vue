@@ -1,29 +1,37 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router';
-import { routesFile } from './config';
-import type { RawWalk } from './interfaces/Walk';
-import Walk from './interfaces/Walk';
+import SidebarContent from '@/components/SidebarContent.vue';
+import MapView from '@/components/MapView.vue';
 import { ref } from 'vue';
+import type { Point } from '@/interfaces/Point.ts';
 
-const walks = ref<Walk[]>();
+const location = ref<Point>({
+  lat: 51.45,
+  lng: -2.6,
+});
 
-fetch(routesFile)
-  .then<RawWalk[]>((walksResponse) => walksResponse.json())
-  .then((rawWalks) => (walks.value = rawWalks.map((walk) => new Walk(walk))))
-  .catch((e: unknown) => {
-    console.error('Error fetching walks', e);
-    walks.value = [];
-  });
+const selected = ref<string>();
 
-const isEmbedded = window.self !== window.top;
+const zoom = ref(10);
 </script>
 
 <template>
-  <RouterView
-    v-model:walks="walks"
-    :lockFilter="isEmbedded"
-    :lockContributions="isEmbedded"
-    :showFullLink="isEmbedded"
+  <SidebarContent
+    :walks="filteredWalks"
+    :selected="selected"
+    :all-tags="allTags"
+    :filter="tagFilter"
+    :lockFilter="lockFilter"
+    :lockContributions="lockContributions"
+    :showFullLink="showFullLink"
+    @update:filter="updateFilter"
+    @hover-point="hoveredPoint = $event"
+  />
+  <MapView
+    v-model:center="location"
+    v-model:zoom="zoom"
+    v-model:selected="selected"
+    v-model:walks="filteredWalks"
+    :hovered-point="hoveredPoint"
   />
 </template>
 
@@ -31,6 +39,18 @@ const isEmbedded = window.self !== window.top;
 :root {
   --transition-speed: 0.5s;
   font-size: 12px;
+
+  @media screen and (min-width: 800px) {
+    font-size: 14px;
+  }
+
+  @media screen and (min-width: 1000px) {
+    font-size: 16px;
+  }
+
+  @media screen and (min-width: 1500px) {
+    font-size: 18px;
+  }
 }
 
 a {
@@ -45,29 +65,12 @@ body {
   background-color: var(--background);
 }
 
-@media screen and (min-width: 800px) {
-  :root {
-    font-size: 14px;
-  }
-}
-
-@media screen and (min-width: 1000px) {
-  :root {
-    font-size: 16px;
-  }
-}
-
-@media screen and (min-width: 1500px) {
-  :root {
-    font-size: 18px;
-  }
-}
-
 body {
   height: 100%;
   display: flex;
   align-items: stretch;
-  flex-direction: column;
+  flex-direction: row;
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

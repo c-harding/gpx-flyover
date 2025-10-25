@@ -12,13 +12,4 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  server: {
-    proxy: {
-      '/walks.json': {
-        target: 'https://routes.ubes.co.uk/walks.json',
-        ignorePath: true,
-        changeOrigin: true,
-      },
-    },
-  },
 });
