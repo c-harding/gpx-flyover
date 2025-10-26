@@ -124,7 +124,9 @@ const dropdownOptions = [30, 60, 120, 300, 600, 1200].map((speed) => ({
         v-for="track of trackStore.tracks"
         :key="track.id"
         :track="track"
+        :initials="trackStore.getTrackIcon(track.id).initials"
         :iconSvg="trackStore.getTrackIcon(track.id).svg"
+        @rename="trackStore.setTrackIcon(track.id, $event)"
       />
     </ul>
     <div :class="$style.overlay" @click="minimised = !minimised" @wheel="minimised = true" />

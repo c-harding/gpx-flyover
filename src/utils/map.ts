@@ -1,14 +1,24 @@
 import { bounds as viewportBounds } from '@placemarkio/geo-viewport';
 import type { Feature, FeatureCollection, LineString } from 'geojson';
 import * as mapboxgl from 'mapbox-gl';
-import { nextTick, type Ref, watch } from 'vue';
-import type { Track } from '@/model/Track.ts';
+import { nextTick, watch } from 'vue';
+import { markerPosition, type Track, trackSegment } from '@/model/Track.ts';
 
 export const mapboxToken =
   'pk.eyJ1IjoiY2hhcmRpbmciLCJhIjoiY2tocjJpcW5wMGYyOTJydDBicTZvam8xcCJ9.ZJfnHJE_5dJNCsEsQCrwJw';
 
 export interface MapProperties {
   id: string;
+}
+
+export enum MapSourceLayer {
+  LINES = 'lines',
+  COMPLETED = 'completed',
+}
+
+export enum MapLayer {
+  LINES = 'lines',
+  COMPLETED = 'completed',
 }
 
 const fromZoom = (
@@ -22,70 +32,107 @@ const fromZoom = (
 
 const makeGeoJsonData = (
   tracks: readonly Track[] = [],
+  cutOffTime?: Date,
 ): FeatureCollection<LineString, MapProperties> => ({
   type: 'FeatureCollection',
   features: tracks.map<Feature<LineString, MapProperties>>((track) => ({
     type: 'Feature',
     properties: {
-      id: String(track.id),
+      id: track.featureId,
     },
-    geometry: toGeoJSON(track),
+    geometry: toGeoJSON(track, cutOffTime),
   })),
 });
 
-const toGeoJSON = (track: Track): GeoJSON.LineString => ({
-  type: 'LineString',
-  coordinates: track.points.map((point) => point.lonLat),
-});
+const toGeoJSON = (track: Track, cutOffTime?: Date): GeoJSON.LineString => {
+  let coordinates: [number, number][];
+  if (cutOffTime !== undefined) {
+    const segment = trackSegment(track, cutOffTime);
+    const { lon, lat } = markerPosition(track, segment);
+    coordinates = track.points
+      .slice(0, segment)
+      .map((point) => point.lonLat)
+      .concat([lon, lat]);
+  } else {
+    coordinates = track.points.map((point) => point.lonLat);
+  }
+  return { type: 'LineString', coordinates };
+};
 
 const makeGeoJson = (tracks: readonly Track[] = []): mapboxgl.GeoJSONSourceSpecification => ({
   type: 'geojson',
-  lineMetrics: true,
   data: makeGeoJsonData(tracks),
 });
 
-const buildLineLayer = (id: string): mapboxgl.Layer => ({
+interface LayerDef {
+  source: MapSourceLayer;
+  color: mapboxgl.ExpressionSpecification | string;
+  width: mapboxgl.ExpressionSpecification | number;
+  opacity: mapboxgl.ExpressionSpecification | number;
+}
+
+const layers: Record<MapLayer, LayerDef> = {
+  [MapLayer.LINES]: {
+    source: MapSourceLayer.LINES,
+    color: '#00F',
+    opacity: 0.25,
+    width: fromZoom([5, 1], [17, 4], [22, 8]),
+  },
+  [MapLayer.COMPLETED]: {
+    source: MapSourceLayer.COMPLETED,
+    color: '#00F',
+    opacity: 1,
+    width: fromZoom([5, 4], [17, 8]),
+  },
+};
+
+const buildLineLayer = (id: string, layer: LayerDef): mapboxgl.Layer => ({
   id,
   type: 'line',
-  source: id,
+  source: layer.source,
   layout: { 'line-join': 'round', 'line-cap': 'round' },
   paint: {
-    'line-color': '#00F',
-    'line-width': fromZoom([5, 1], [17, 4], [22, 8]),
-    'line-opacity': fromZoom([5, 0.75], [10, 0.55]),
+    'line-color': layer.color,
+    'line-width': layer.width,
+    'line-opacity': layer.opacity,
   },
 });
+
+export const addLayersToMap = (map: mapboxgl.Map) => {
+  Object.values(MapSourceLayer).forEach(
+    (id) => map.getSource(id) ?? map.addSource(id, makeGeoJson()),
+  );
+
+  Object.entries(layers).forEach(([id, layer]) => {
+    if (map.getLayer(id)) map.removeLayer(id);
+    map.addLayer(buildLineLayer(id, layer));
+  });
+};
 
 export const applyTracks = (
   map: mapboxgl.Map,
   tracks: readonly Track[],
   zoomToSelection = false,
 ): void => {
-  for (const track of tracks) {
-    const id = track.layerId;
-    if (!map.getSource<mapboxgl.GeoJSONSource>(id)) {
-      const source = makeGeoJson([track]);
-      map.addSource(id, source);
+  const source = map.getSource<mapboxgl.GeoJSONSource>(MapSourceLayer.LINES);
+  source?.setData(makeGeoJsonData(tracks));
 
-      if (zoomToSelection && track.points.length > 0) {
-        const bounds = track.points.reduce(
-          (bounds, point) => bounds.extend(point.lonLat),
-          new mapboxgl.LngLatBounds(track.points[0].lonLat, track.points[0].lonLat),
-        );
-        map.fitBounds(bounds, { padding: 20 });
-        zoomToSelection = false;
-      }
-    }
-
-    if (map.getLayer(id)) map.removeLayer(id);
-    map.addLayer(buildLineLayer(id));
+  if (zoomToSelection && tracks[0].points.length > 0) {
+    const bounds = tracks[0].points.reduce(
+      (bounds, point) => bounds.extend(point.lonLat),
+      new mapboxgl.LngLatBounds(tracks[0].points[0].lonLat, tracks[0].points[0].lonLat),
+    );
+    map.fitBounds(bounds, { padding: 20 });
   }
 };
 
-export const removeOldTracks = (map: mapboxgl.Map, ids: string[]): void => {
-  for (const id of ids) {
-    map.removeSource(id);
-  }
+export const applyCompletedTracks = (
+  map: mapboxgl.Map,
+  tracks: readonly Track[],
+  cutOffTime: Date | undefined,
+): void => {
+  const source = map.getSource<mapboxgl.GeoJSONSource>(MapSourceLayer.COMPLETED);
+  source?.setData(makeGeoJsonData(tracks, cutOffTime));
 };
 
 const surround = (
@@ -102,7 +149,6 @@ interface UseMapSelectionConfig {
   getExternalSelection: () => IdSelection;
   flyToSelection: () => void;
   emitUpdate: (newSelection: IdSelection) => void;
-  layers: Readonly<Ref<string[]>>;
 }
 
 interface UseMapSelection {
@@ -113,7 +159,6 @@ export const useMapSelection = ({
   getExternalSelection,
   flyToSelection,
   emitUpdate,
-  layers,
 }: UseMapSelectionConfig): UseMapSelection => {
   let localSelection: IdSelection;
 
@@ -139,7 +184,7 @@ export const useMapSelection = ({
 
     for (let i = 0; i < 5; i += 1) {
       const neighbours = map.queryRenderedFeatures(surround(e.point, i), {
-        layers: layers.value,
+        layers: [MapSourceLayer.LINES],
       });
       if (neighbours.length > 0) {
         select((neighbours[0].properties as MapProperties).id);

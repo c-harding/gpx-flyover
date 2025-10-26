@@ -2,10 +2,13 @@
 import type { Track } from '@/model/Track.ts';
 import { computed } from 'vue';
 
-const { track } = defineProps<{
+const { track, initials } = defineProps<{
   track: Track;
+  initials: string;
   iconSvg?: string;
 }>();
+
+const emit = defineEmits<(e: 'rename', newInitials: string) => void>();
 
 const duration = computed(() => {
   const totalSeconds = track.duration.total;
@@ -31,12 +34,19 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 const timeRange = computed(() =>
   timeFormatter.formatRange(track.duration.startTime, track.duration.endTime),
 );
+
+function rename() {
+  const newName = prompt('Enter new track name:', initials);
+  if (newName !== null && newName.trim() !== '') {
+    emit('rename', newName.trim());
+  }
+}
 </script>
 
 <template>
   <li :key="track.id" :class="$style.track">
     <div :class="$style.nameRow">
-      <div v-if="iconSvg" :class="$style.initials" v-html="iconSvg"></div>
+      <div v-if="iconSvg" :class="$style.initials" v-html="iconSvg" @dblclick="rename"></div>
       <h3>{{ track.name }}</h3>
     </div>
     <p>{{ timeRange }}<br />({{ duration }})</p>

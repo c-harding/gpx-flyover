@@ -11,7 +11,7 @@ export class Track {
   private static layerPrefix = 'track-';
 
   readonly id = ++Track.index;
-  readonly layerId = Track.layerPrefix + String(this.id);
+  readonly featureId = Track.layerPrefix + String(this.id);
 
   readonly points: TrackPoint[];
   readonly duration: { startTime: Date; endTime: Date; total: number };

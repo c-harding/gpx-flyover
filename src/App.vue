@@ -9,30 +9,12 @@ const location = ref<Point>({
   lng: 11,
 });
 
-const selected = ref<string>();
-
 const zoom = ref(3);
 </script>
 
 <template>
-  <SidebarContent
-    :walks="filteredWalks"
-    :selected="selected"
-    :all-tags="allTags"
-    :filter="tagFilter"
-    :lockFilter="lockFilter"
-    :lockContributions="lockContributions"
-    :showFullLink="showFullLink"
-    @update:filter="updateFilter"
-    @hover-point="hoveredPoint = $event"
-  />
-  <MapView
-    v-model:center="location"
-    v-model:zoom="zoom"
-    v-model:selected="selected"
-    v-model:walks="filteredWalks"
-    :hovered-point="hoveredPoint"
-  />
+  <SidebarContent />
+  <MapView v-model:center="location" v-model:zoom="zoom" />
 </template>
 
 <style>

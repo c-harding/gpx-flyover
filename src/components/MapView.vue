@@ -20,8 +20,8 @@ const mapStyleUrls: Record<MapStyle, string> = {
 <script setup lang="ts">
 import { useTrackStore } from '@/stores/TrackStore.ts';
 import MaterialIcon from '@/components/MaterialIcon.vue';
-import { distanceProportion, markerPosition, trackSegment } from '@/model/Track.ts';
-import { removeOldTracks } from '@/utils/map.ts';
+import { markerPosition, trackSegment } from '@/model/Track.ts';
+import { addLayersToMap, applyCompletedTracks } from '@/utils/map.ts';
 
 const center = defineModel<mapboxgl.LngLatLike>('center');
 const zoom = defineModel<number>('zoom');
@@ -98,18 +98,19 @@ watch(
 let lastMarkers: mapboxgl.Marker[] = [];
 
 watch(
-  () => trackStore.currentTime,
-  (time) => {
+  () => [trackStore.currentTime, trackStore.tracks] as const,
+  ([time, tracks]) => {
+    applyCompletedTracks(map, tracks, time);
+  },
+  { immediate: true, deep: true },
+);
+
+watch(
+  () => [trackStore.currentTime, trackStore.tracks, trackStore.trackIcons] as const,
+  ([time, tracks]) => {
     const usedMarkers: mapboxgl.Marker[] = [];
     for (const track of trackStore.tracks) {
       const segment = trackSegment(track, time);
-      map.setPaintProperty(track.layerId, 'line-gradient', [
-        'step',
-        ['line-progress'],
-        '#00F',
-        distanceProportion(track, segment),
-        'rgba(0, 0, 255, 0.25)',
-      ]);
       // add marker
       const marker = trackStore.getMarker(track.id, (svg) => new mapboxgl.Marker(makeMarker(svg)));
       usedMarkers.push(marker);
@@ -137,25 +138,20 @@ onBeforeUnmount(() => {
   window.removeEventListener('transitionend', resize);
 });
 
-let lastTracks: string[] = [];
+let lastTracksCount = 0;
 
 watch(
   () => trackStore.tracks,
   (tracks) => {
-    const lastTracksCount = lastTracks.length;
     applyTracks(map, tracks, lastTracksCount === 0);
-    const ids = tracks.map((track) => track.layerId);
-    removeOldTracks(
-      map,
-      lastTracks.filter((id) => !ids.includes(id)),
-    );
-    lastTracks = ids;
+    lastTracksCount = tracks.length;
   },
   { deep: true },
 );
 
 const mapLoaded = (map: mapboxgl.Map) => {
   resize();
+  addLayersToMap(map);
 
   applyTracks(map, trackStore.tracks);
 };

@@ -113,11 +113,14 @@ export const useTrackStore = defineStore('track', () => {
     }
   }
 
-  function setTrackIcon(trackId: number, initials: string, color = '#00f') {
+  function setTrackIcon(trackId: number, initials: string, color?: string) {
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- Fallback to existing color if blank
+    color ||= trackIcons.get(trackId)?.color || '#00f';
+    const size = Math.min(300, 400 / initials.length);
     const svg = `
     <svg viewBox="0 0 500 500">
       <circle cx="250" cy="250" r="200" fill="${escapeHtml(color)}" />
-      <text x="250" y="250" text-anchor="middle" dominant-baseline="central" font-size="300" fill="#fff"
+      <text x="250" y="250" text-anchor="middle" dominant-baseline="central" font-size="${size}" fill="#fff"
         >${escapeHtml(initials)}</text
       >
     </svg>
