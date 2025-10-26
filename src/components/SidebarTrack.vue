@@ -1,0 +1,73 @@
+<script setup lang="ts">
+import type { Track } from '@/model/Track.ts';
+import { computed } from 'vue';
+
+const { track } = defineProps<{
+  track: Track;
+  iconSvg?: string;
+}>();
+
+const duration = computed(() => {
+  const totalSeconds = track.duration.total;
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [days, hours, minutes, seconds];
+  const labels = ['d', 'h', 'm', 's'];
+  const firstNonZeroIndex = parts.findIndex((part) => part > 0);
+  return parts
+    .slice(firstNonZeroIndex)
+    .map((part, index) => `${String(part)}${labels[firstNonZeroIndex + index]}`)
+    .join(' ');
+});
+
+const timeFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'medium',
+});
+
+const timeRange = computed(() =>
+  timeFormatter.formatRange(track.duration.startTime, track.duration.endTime),
+);
+</script>
+
+<template>
+  <li :key="track.id" :class="$style.track">
+    <div :class="$style.nameRow">
+      <div v-if="iconSvg" :class="$style.initials" v-html="iconSvg"></div>
+      <h3>{{ track.name }}</h3>
+    </div>
+    <p>{{ timeRange }}<br />({{ duration }})</p>
+  </li>
+</template>
+
+<style lang="scss" module>
+@use '@/styles/tablet';
+
+.track {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+
+  h3 {
+    position: sticky;
+    top: 0;
+    background: inherit;
+    margin: 0;
+    padding: 0.25em 0;
+  }
+}
+
+.nameRow {
+  display: flex;
+  gap: 1em;
+  align-items: center;
+}
+
+.initials {
+  width: 2.5em;
+  height: 2.5em;
+}
+</style>

@@ -5,13 +5,13 @@ import { ref } from 'vue';
 import type { Point } from '@/interfaces/Point.ts';
 
 const location = ref<Point>({
-  lat: 51.45,
-  lng: -2.6,
+  lat: 48,
+  lng: 11,
 });
 
 const selected = ref<string>();
 
-const zoom = ref(10);
+const zoom = ref(3);
 </script>
 
 <template>

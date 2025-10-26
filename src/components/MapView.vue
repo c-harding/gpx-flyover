@@ -1,14 +1,7 @@
 <script lang="ts">
 import * as mapboxgl from 'mapbox-gl';
-import type { PointOnLine } from '@/interfaces/Point';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useCssModule, watch } from 'vue';
-import {
-  addLayersToMap,
-  applyWalks,
-  mapboxToken,
-  MapSourceLayer,
-  useMapSelection,
-} from '@/utils/map';
+import { onBeforeUnmount, onMounted, ref, useCssModule, watch } from 'vue';
+import { applyTracks, mapboxToken } from '@/utils/map';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapStyle, useMapStyle } from '@/utils/map-style';
 
@@ -19,24 +12,21 @@ declare global {
 }
 
 const mapStyleUrls: Record<MapStyle, string> = {
-  [MapStyle.MAPBOX]: '/mapbox-style.json',
+  [MapStyle.MAPBOX]: import.meta.env.BASE_URL + '/mapbox-style.json',
+  [MapStyle.SATELLITE]: 'mapbox://styles/mapbox/standard-satellite',
 };
 </script>
 
 <script setup lang="ts">
-import polyline from '@mapbox/polyline';
-import type Walk from '@/interfaces/Walk';
+import { useTrackStore } from '@/stores/TrackStore.ts';
+import MaterialIcon from '@/components/MaterialIcon.vue';
+import { distanceProportion, markerPosition, trackSegment } from '@/model/Track.ts';
+import { removeOldTracks } from '@/utils/map.ts';
 
 const center = defineModel<mapboxgl.LngLatLike>('center');
 const zoom = defineModel<number>('zoom');
-const selected = defineModel<string>('selected');
 
-const { walks = [], hoveredPoint } = defineProps<{
-  hoveredPoint?: PointOnLine;
-  walks?: Walk[];
-}>();
-
-const selectedWalks = computed(() => walks.filter((walk) => walk.id === selected.value));
+const trackStore = useTrackStore();
 
 const style = useCssModule();
 
@@ -44,11 +34,10 @@ const container = ref<HTMLDivElement>();
 
 const { mapStyle, nextMapStyle } = useMapStyle();
 
-const makeMarker = () => {
+const makeMarker = (svg: string) => {
   const wrapper = document.createElement('div');
-  wrapper.innerHTML = `<svg class="${style.arrow}" viewBox="0 0 500 800">
-    <polygon points="100,400 200,400 250,300 300,400 400,400 250,100" class="${style.triangle}" />
-  </svg>`;
+  wrapper.className = style.markerWrapper;
+  wrapper.innerHTML = svg;
   return wrapper;
 };
 
@@ -91,12 +80,9 @@ map.on('zoomend', () => {
 map.on('moveend', () => {
   moveend(map);
 });
-map.on('click', (ev) => {
-  click(ev);
-});
 
-map.on('dblclick', (ev) => {
-  dblclick(ev);
+watch(mapStyle, (mapStyle) => {
+  map.setStyle(mapStyleUrls[mapStyle]);
 });
 
 watch(
@@ -109,6 +95,40 @@ watch(
   { immediate: true },
 );
 
+let lastMarkers: mapboxgl.Marker[] = [];
+
+watch(
+  () => trackStore.currentTime,
+  (time) => {
+    const usedMarkers: mapboxgl.Marker[] = [];
+    for (const track of trackStore.tracks) {
+      const segment = trackSegment(track, time);
+      map.setPaintProperty(track.layerId, 'line-gradient', [
+        'step',
+        ['line-progress'],
+        '#00F',
+        distanceProportion(track, segment),
+        'rgba(0, 0, 255, 0.25)',
+      ]);
+      // add marker
+      const marker = trackStore.getMarker(track.id, (svg) => new mapboxgl.Marker(makeMarker(svg)));
+      usedMarkers.push(marker);
+      const { lon, lat /* heading */ } = markerPosition(track, segment);
+      marker.setLngLat([lon, lat]);
+      // track.marker.setRotation(heading);
+      marker.addTo(map);
+    }
+    // remove unused markers
+    for (const marker of lastMarkers) {
+      if (!usedMarkers.includes(marker)) {
+        marker.remove();
+      }
+    }
+    lastMarkers = usedMarkers;
+  },
+  { immediate: true, deep: true },
+);
+
 onMounted(() => {
   window.addEventListener('transitionend', resize, { passive: true });
 });
@@ -117,22 +137,27 @@ onBeforeUnmount(() => {
   window.removeEventListener('transitionend', resize);
 });
 
+let lastTracks: string[] = [];
+
 watch(
-  () => walks,
-  (walks) => {
-    applyWalks(map, walks, MapSourceLayer.LINES);
+  () => trackStore.tracks,
+  (tracks) => {
+    const lastTracksCount = lastTracks.length;
+    applyTracks(map, tracks, lastTracksCount === 0);
+    const ids = tracks.map((track) => track.layerId);
+    removeOldTracks(
+      map,
+      lastTracks.filter((id) => !ids.includes(id)),
+    );
+    lastTracks = ids;
   },
+  { deep: true },
 );
-watch(selectedWalks, (selectedWalks) => {
-  applyWalks(map, selectedWalks, MapSourceLayer.SELECTED);
-});
 
 const mapLoaded = (map: mapboxgl.Map) => {
   resize();
-  addLayersToMap(map);
 
-  applyWalks(map, walks, MapSourceLayer.LINES);
-  applyWalks(map, selectedWalks.value, MapSourceLayer.SELECTED);
+  applyTracks(map, trackStore.tracks);
 };
 
 const zoomend = (map: mapboxgl.Map): void => {
@@ -143,50 +168,32 @@ const moveend = (map: mapboxgl.Map): void => {
   center.value = map.getCenter();
 };
 
-const flyToSelection = () => {
-  if (!selectedWalks.value.length) return;
-  const walk = selectedWalks.value[0];
+// const flyToSelection = () => {
+//   if (!selectedWalks.value.length) return;
+//   const walk = selectedWalks.value[0];
+//
+//   const padding = 50;
+//
+//   const coordinates = polyline.decode(walk.polyline).map<[number, number]>(([y, x]) => [x, y]);
+//   const bounds = coordinates.reduce(
+//     (acc, coord) => acc.extend(coord),
+//     new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]),
+//   );
+//   map.fitBounds(bounds, { padding, maxZoom: 20 });
+// };
 
-  const padding = 50;
+// const { click } = useMapSelection({
+//   getExternalSelection: () => selected.value,
+//   flyToSelection,
+//   emitUpdate: () => undefined,
+// });
 
-  const coordinates = polyline.decode(walk.polyline).map<[number, number]>(([y, x]) => [x, y]);
-  const bounds = coordinates.reduce(
-    (acc, coord) => acc.extend(coord),
-    new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]),
-  );
-  map.fitBounds(bounds, { padding, maxZoom: 20 });
-};
-
-const { click } = useMapSelection({
-  getExternalSelection: () => selected.value,
-  flyToSelection,
-  emitUpdate: () => undefined,
-});
-
-function dblclick(e: mapboxgl.MapMouseEvent) {
-  if (selected.value) {
-    e.preventDefault();
-    void nextTick(flyToSelection);
-  }
-}
-
-const hoveredMarker = new mapboxgl.Marker(makeMarker());
-
-watch(
-  () => hoveredPoint,
-  (point) => {
-    if (!point) {
-      hoveredMarker.remove();
-    } else {
-      hoveredMarker.setLngLat([point.lng, point.lat]);
-      const arrow = hoveredMarker.getElement().querySelector<HTMLElement>(`.${style.arrow}`);
-      if (!arrow) return;
-      arrow.style.transform = `rotate(${String(point.bearing)}deg)`;
-      hoveredMarker.addTo(map);
-    }
-  },
-  { immediate: true },
-);
+// function dblclick(e: mapboxgl.MapMouseEvent) {
+//   if (selected.value) {
+//     e.preventDefault();
+//     void nextTick(flyToSelection);
+//   }
+// }
 </script>
 
 <template>
@@ -212,19 +219,16 @@ watch(
       cursor: pointer;
     }
   }
-
-  .arrow {
-    width: 3em;
-  }
-
-  .triangle {
-    fill: #f00;
-    stroke: white;
-    stroke-width: 20;
-  }
 }
 
 :global(.mapboxgl-ctrl-bottom-right) {
   margin-left: 100px;
+}
+
+.markerWrapper {
+  svg {
+    width: 2em;
+    height: 2em;
+  }
 }
 </style>

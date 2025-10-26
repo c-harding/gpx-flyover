@@ -12,19 +12,17 @@
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
-    "format": "prettier --write src/",
-    "compress": "rsync -a apache/ dist/ && rsync -a tools/ dist/ && tar -czf dist.tar.gz dist",
-    "deploy": "scp deploy.sh dist.tar.gz ubes:walks && ssh ubes 'walks/deploy.sh'",
-    "build-deploy": "yarn build && yarn compress && yarn deploy"
+    "format": "prettier --write src/"
   },
   "dependencies": {
-    "@mapbox/polyline": "^1.2.1",
     "@placemarkio/geo-viewport": "^1.0.2",
     "@turf/bearing": "^7.2.0",
     "@turf/destination": "^7.2.0",
     "@turf/distance": "^7.2.0",
     "@unhead/vue": "^1.11.14",
+    "@we-gold/gpxjs": "^1.1.0",
     "mapbox-gl": "^3.9.2",
+    "pinia": "^3.0.3",
     "vue": "^3.5.13"
   },
   "devDependencies": {

@@ -2,10 +2,11 @@ import { computed, ref, watch } from 'vue';
 
 export enum MapStyle {
   MAPBOX = 'MAPBOX',
+  SATELLITE = 'SATELLITE',
 }
 
 const localStorageMapStyleKey = 'gpx-library-map-style';
-const mapStyles = [MapStyle.MAPBOX];
+const mapStyles = [MapStyle.MAPBOX, MapStyle.SATELLITE];
 
 const cachedMapStyleIndex = mapStyles.indexOf(
   localStorage.getItem(localStorageMapStyleKey) as MapStyle,
@@ -25,7 +26,7 @@ export function useMapStyle() {
   };
 
   watch(mapStyle, (mapStyle) => {
-    localStorage.setItem(localStorageMapStyleKey, mapStyle);
+    updateMapStyleCache(mapStyle);
   });
 
   return { mapStyle, nextMapStyle };

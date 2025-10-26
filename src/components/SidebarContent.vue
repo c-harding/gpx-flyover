@@ -1,31 +1,66 @@
 <script setup lang="ts">
-import type { PointOnLine } from '@/interfaces/Point';
-import type Walk from '@/interfaces/Walk';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import MaterialIcon from './MaterialIcon.vue';
-import SidebarWalk from './SidebarWalk.vue';
+import SidebarTrack from './SidebarTrack.vue';
+import { useTrackStore } from '@/stores/TrackStore.ts';
+import UploadArea from '@/components/UploadArea.vue';
+import DropdownControl from '@/components/DropdownControl.vue';
+import { appName } from '@/config.ts';
 
-const { walks, selected, lockFilter, lockContributions, showFullLink } = defineProps<{
-  walks: Walk[] | undefined;
-  selected?: string;
-  allTags?: string[];
-  lockFilter?: boolean;
-  lockContributions?: boolean;
-  showFullLink?: boolean;
-}>();
-
-const emit = defineEmits<{ hoverPoint: [point: PointOnLine | undefined] }>();
-
-const tagFilter = defineModel<string>('filter', { default: '' });
+const trackStore = useTrackStore();
 
 const minimised = ref(false);
 
-const sidebarItemListRef = ref<HTMLElement>();
+const currentTime = computed({
+  get: () => +(trackStore.currentTime ?? 0),
+  set: (value: string) => {
+    trackStore.currentTime = new Date(+value);
+  },
+});
+
+const isSameDay = computed(() => {
+  if (!trackStore.range) return true;
+  const minDate = new Date(trackStore.range.min);
+  const maxDate = new Date(trackStore.range.max);
+  return (
+    minDate.getFullYear() === maxDate.getFullYear() &&
+    minDate.getMonth() === maxDate.getMonth() &&
+    minDate.getDate() === maxDate.getDate()
+  );
+});
+
+const formatDateTime = (date: Date | number) =>
+  new Date(date).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+const formatDate = (date: Date | number) =>
+  new Date(date).toLocaleString(undefined, {
+    dateStyle: 'medium',
+  });
+
+const formatTime = (date: Date | number) =>
+  new Date(date).toLocaleString(undefined, {
+    timeStyle: 'short',
+  });
+
+const formatTimeWithSeconds = (date: Date | number) =>
+  new Date(date).toLocaleString(undefined, {
+    timeStyle: 'medium',
+  });
+
+const dropdownOptions = [30, 60, 120, 300, 600, 1200].map((speed) => ({
+  value: speed.toString(),
+  label: `${speed.toString()}x`,
+}));
 </script>
 
 <template>
   <div :class="[$style.sidebar, minimised && $style.minimised]">
-    <div :class="$style.topBox"></div>
+    <div :class="$style.topBox">
+      <h1>{{ appName }}</h1>
+    </div>
     <div :class="[$style.minimisedMessage, $style.map]">
       <p><MaterialIcon>map</MaterialIcon></p>
       <p>Map</p>
@@ -34,16 +69,62 @@ const sidebarItemListRef = ref<HTMLElement>();
       <p><MaterialIcon>arrow_back</MaterialIcon></p>
       <p>Back</p>
     </div>
-    <ul ref="sidebarItemListRef">
-      <SidebarWalk
-        v-for="walk of sortedWalks"
-        :key="walk.id"
-        :walk="walk"
-        :selected="selected !== undefined && walk.id === selected"
-        :lockFilter="lockFilter"
-        @select="select(walk)"
-        @hover-point="emit('hoverPoint', $event)"
-        @set-tag-filter="tagFilter = $event"
+    <ul>
+      <li :class="$style.dummy">
+        <UploadArea />
+      </li>
+      <li :class="$style.dummy">
+        <div :class="$style.timeControls">
+          <!--          play/pause-->
+          <MaterialIcon @click="trackStore.isPlaying = !trackStore.isPlaying">
+            {{ trackStore.isPlaying ? 'pause' : 'play_arrow' }}
+          </MaterialIcon>
+          <div :class="$style.timeDisplay">
+            {{
+              !trackStore.currentTime
+                ? ' '
+                : isSameDay
+                  ? formatTimeWithSeconds(trackStore.currentTime)
+                  : formatDateTime(trackStore.currentTime)
+            }}
+          </div>
+          <DropdownControl
+            :options="dropdownOptions"
+            :modelValue="trackStore.playbackSpeed.toString()"
+            @update:modelValue="trackStore.playbackSpeed = +$event"
+          />
+        </div>
+        <label :class="$style.timeSlider">
+          <span v-if="trackStore.range" :class="$style.timeLabels">
+            <span v-if="!isSameDay">{{ formatDate(trackStore.range.min) }}</span>
+            <span>{{ formatTime(trackStore.range.min) }}</span>
+          </span>
+          <input
+            :disabled="!trackStore.range"
+            type="range"
+            :min="trackStore.range?.min ?? 0"
+            :max="trackStore.range?.max ?? 1"
+            step="1000"
+            v-model="currentTime"
+          />
+          <span v-if="trackStore.range" :class="$style.timeLabels">
+            <span v-if="!isSameDay">{{ formatDate(trackStore.range.max) }}</span>
+            <span>{{ formatTime(trackStore.range.max) }}</span>
+          </span>
+        </label>
+      </li>
+      <li
+        v-for="warning of trackStore.warnings"
+        :class="[$style.dummy, $style.warning]"
+        :key="warning"
+      >
+        <MaterialIcon inline>warning</MaterialIcon> {{ warning }}
+      </li>
+      <SidebarTrack
+        v-for="track of trackStore.tracks"
+        :key="track.id"
+        :track="track"
+        :iconSvg="trackStore.getTrackIcon(track.id).svg"
       />
     </ul>
     <div :class="$style.overlay" @click="minimised = !minimised" @wheel="minimised = true" />
@@ -195,5 +276,37 @@ $minimised-width: 5rem;
       margin-inline-end: -$minimised-width;
     }
   }
+}
+.timeControls {
+  display: flex;
+  gap: 1em;
+  align-items: center;
+}
+.timeDisplay {
+  text-align: center;
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+.timeSlider {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+
+  input[type='range'] {
+    flex: 1 0;
+  }
+
+  .timeLabels {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.8em;
+    text-align: center;
+    min-width: max-content;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.warning {
+  background-color: var(--background-warn);
 }
 </style>
