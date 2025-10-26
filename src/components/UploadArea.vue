@@ -71,7 +71,7 @@ function onDrop(event: DragEvent) {
     display: block;
     cursor: pointer;
     font-weight: bold;
-    color: #333;
+    color: var(--color);
 
     > input[type='file'] {
       display: none;
