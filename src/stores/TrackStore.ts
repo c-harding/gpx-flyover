@@ -85,45 +85,56 @@ export const useTrackStore = defineStore('track', () => {
     }, 5000);
   }
 
+  async function addTrackFromSample(sampleName: string, initials: string) {
+    const response = await fetch(import.meta.env.BASE_URL + `sample/${sampleName}.gpx`);
+    const gpxString = await response.text();
+
+    addTrackFromString(gpxString, sampleName, initials);
+  }
+
+  function addTrackFromString(gpxString: string, fileName: string, initials?: string) {
+    const [gpx, error] = parseGPX(gpxString);
+    if (error) throw error;
+
+    if (gpx.tracks.length) {
+      for (let i = 0; i < gpx.tracks.length; i++) {
+        const gpxTrack = gpx.tracks[i];
+        const name =
+          gpxTrack.name || (gpx.metadata.name || fileName) + (i > 0 ? String(i + 1) : '');
+        const authorInitials =
+          initials || gpx.metadata.author?.name?.match(/\b\p{L}/gu)?.join('') || undefined;
+        let track: Track;
+        try {
+          track = new Track(gpxTrack, name);
+        } catch (e: unknown) {
+          warn(`Skipping track "${name}": ${(e as Error).message}`);
+          continue;
+        }
+        tracks.push(track);
+        setTrackIcon(track.id, authorInitials || track.id.toString());
+      }
+    } else if (gpx.routes.length) {
+      warn('GPX routes are not supported, because they do not have timing data.');
+    } else {
+      warn('No tracks found in GPX file.');
+    }
+  }
+
   async function addTracksFromFiles(files: FileList) {
     for (const file of Array.from(files)) {
-      const contents = await file.text();
+      const gpxString = await file.text();
 
-      const [gpx, error] = parseGPX(contents);
-      if (error) throw error;
-
-      if (gpx.tracks.length) {
-        for (let i = 0; i < gpx.tracks.length; i++) {
-          const gpxTrack = gpx.tracks[i];
-          const name =
-            // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- An empty string is not a valid name
-            gpxTrack.name || (gpx.metadata.name || file.name) + (i > 0 ? String(i + 1) : '');
-          let track: Track;
-          try {
-            track = new Track(name, gpxTrack);
-          } catch (e: unknown) {
-            warn(`Skipping track "${name}": ${(e as Error).message}`);
-            continue;
-          }
-          tracks.push(track);
-          setTrackIcon(track.id, track.id.toString());
-        }
-      } else if (gpx.routes.length) {
-        warn('GPX routes are not supported, because they do not have timing data.');
-      } else {
-        warn('No tracks found in GPX file.');
-      }
+      addTrackFromString(gpxString, file.name);
     }
   }
 
   function setTrackIcon(trackId: number, initials: string, color?: string) {
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- Fallback to existing color if blank
     color ||= trackIcons.get(trackId)?.color || '#00f';
     const size = Math.min(300, 400 / initials.length);
     const svg = `
     <svg viewBox="0 0 500 500">
       <circle cx="250" cy="250" r="200" fill="${escapeHtml(color)}" />
-      <text x="250" y="250" text-anchor="middle" dominant-baseline="central" font-size="${size}" fill="#fff"
+      <text x="250" y="250" text-anchor="middle" dominant-baseline="central" font-size="${String(size)}" fill="#fff"
         >${escapeHtml(initials)}</text
       >
     </svg>
@@ -172,6 +183,7 @@ export const useTrackStore = defineStore('track', () => {
     getTrackIcon,
     setTrackIcon,
     removeTrack,
+    addTrackFromSample,
     range,
     currentTime,
     warnings,

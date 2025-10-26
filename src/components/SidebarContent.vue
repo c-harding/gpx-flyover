@@ -61,11 +61,11 @@ const dropdownOptions = [30, 60, 120, 300, 600, 1200].map((speed) => ({
     <div :class="$style.topBox">
       <h1>{{ appName }}</h1>
     </div>
-    <div :class="[$style.minimisedMessage, $style.map]">
+    <div :class="[$style.minimisedMessage, $style.map]" @click="minimised = true">
       <p><MaterialIcon>map</MaterialIcon></p>
       <p>Map</p>
     </div>
-    <div :class="$style.minimisedMessage">
+    <div :class="$style.minimisedMessage" @click="minimised = false">
       <p><MaterialIcon>arrow_back</MaterialIcon></p>
       <p>Back</p>
     </div>

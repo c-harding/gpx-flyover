@@ -18,8 +18,8 @@ export class Track {
   readonly distance: number;
 
   constructor(
-    readonly name: string,
     gpx: GpxTrack,
+    readonly name: string,
   ) {
     const points: TrackPoint[] = [];
     for (let i = 0; i < gpx.points.length; i++) {

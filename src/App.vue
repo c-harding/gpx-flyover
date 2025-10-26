@@ -3,6 +3,7 @@ import SidebarContent from '@/components/SidebarContent.vue';
 import MapView from '@/components/MapView.vue';
 import { ref } from 'vue';
 import type { Point } from '@/interfaces/Point.ts';
+import { useTrackStore } from '@/stores/TrackStore.ts';
 
 const location = ref<Point>({
   lat: 48,
@@ -10,6 +11,17 @@ const location = ref<Point>({
 });
 
 const zoom = ref(3);
+
+const { addTrackFromSample } = useTrackStore();
+
+const query = new URLSearchParams(window.location.search);
+const samples = query.getAll('sample');
+void (async () => {
+  for (const sample of samples) {
+    const [sampleName, initials] = sample.split(':', 2).reverse();
+    await addTrackFromSample(sampleName, initials);
+  }
+})();
 </script>
 
 <template>
