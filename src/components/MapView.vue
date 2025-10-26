@@ -95,8 +95,6 @@ watch(
   { immediate: true },
 );
 
-let lastMarkers: mapboxgl.Marker[] = [];
-
 watch(
   () => [trackStore.currentTime, trackStore.tracks] as const,
   ([time, tracks]) => {
@@ -109,7 +107,7 @@ watch(
   () => [trackStore.currentTime, trackStore.tracks, trackStore.trackIcons] as const,
   ([time, tracks]) => {
     const usedMarkers: mapboxgl.Marker[] = [];
-    for (const track of trackStore.tracks) {
+    for (const track of tracks) {
       const segment = trackSegment(track, time);
       // add marker
       const marker = trackStore.getMarker(track.id, (svg) => new mapboxgl.Marker(makeMarker(svg)));
@@ -119,13 +117,6 @@ watch(
       // track.marker.setRotation(heading);
       marker.addTo(map);
     }
-    // remove unused markers
-    for (const marker of lastMarkers) {
-      if (!usedMarkers.includes(marker)) {
-        marker.remove();
-      }
-    }
-    lastMarkers = usedMarkers;
   },
   { immediate: true, deep: true },
 );
@@ -138,13 +129,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('transitionend', resize);
 });
 
-let lastTracksCount = 0;
-
 watch(
   () => trackStore.tracks,
   (tracks) => {
-    applyTracks(map, tracks, lastTracksCount === 0);
-    lastTracksCount = tracks.length;
+    applyTracks(map, tracks);
   },
   { deep: true },
 );

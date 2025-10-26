@@ -18,6 +18,9 @@ export const useTrackStore = defineStore('track', () => {
 
   watch(isPlaying, (playing) => {
     lastTickTime = Date.now();
+    if (playing && currentTime.value && range.value && +currentTime.value >= range.value.max) {
+      currentTime.value = new Date(range.value.min);
+    }
     if (playing) requestAnimationFrame(tick);
   });
 
@@ -126,7 +129,11 @@ export const useTrackStore = defineStore('track', () => {
     </svg>
   `;
     trackIcons.set(trackId, { initials, color, svg });
-    markers.delete(trackId);
+    const marker = markers.get(trackId);
+    if (marker) {
+      marker.remove();
+      markers.delete(trackId);
+    }
   }
 
   function getTrackIcon(trackId: number) {
@@ -143,6 +150,19 @@ export const useTrackStore = defineStore('track', () => {
     return marker;
   }
 
+  function removeTrack(trackId: number) {
+    const trackIndex = tracks.findIndex((t) => t.id === trackId);
+    if (trackIndex !== -1) {
+      tracks.splice(trackIndex, 1);
+    }
+    trackIcons.delete(trackId);
+    const marker = markers.get(trackId);
+    if (marker) {
+      marker.remove();
+      markers.delete(trackId);
+    }
+  }
+
   return {
     tracks,
     trackIcons,
@@ -151,6 +171,7 @@ export const useTrackStore = defineStore('track', () => {
     addTracksFromFiles,
     getTrackIcon,
     setTrackIcon,
+    removeTrack,
     range,
     currentTime,
     warnings,

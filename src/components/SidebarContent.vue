@@ -70,9 +70,8 @@ const dropdownOptions = [30, 60, 120, 300, 600, 1200].map((speed) => ({
       <p>Back</p>
     </div>
     <ul>
-      <li :class="$style.dummy">
-        <UploadArea />
-      </li>
+      <UploadArea :class="$style.dummy" />
+
       <li :class="$style.dummy">
         <div :class="$style.timeControls">
           <!--          play/pause-->
@@ -127,6 +126,7 @@ const dropdownOptions = [30, 60, 120, 300, 600, 1200].map((speed) => ({
         :initials="trackStore.getTrackIcon(track.id).initials"
         :iconSvg="trackStore.getTrackIcon(track.id).svg"
         @rename="trackStore.setTrackIcon(track.id, $event)"
+        @delete="trackStore.removeTrack(track.id)"
       />
     </ul>
     <div :class="$style.overlay" @click="minimised = !minimised" @wheel="minimised = true" />

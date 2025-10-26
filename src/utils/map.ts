@@ -109,21 +109,18 @@ export const addLayersToMap = (map: mapboxgl.Map) => {
   });
 };
 
-export const applyTracks = (
-  map: mapboxgl.Map,
-  tracks: readonly Track[],
-  zoomToSelection = false,
-): void => {
+export const applyTracks = (map: mapboxgl.Map, tracks: readonly Track[]): void => {
   const source = map.getSource<mapboxgl.GeoJSONSource>(MapSourceLayer.LINES);
   source?.setData(makeGeoJsonData(tracks));
 
-  if (zoomToSelection && tracks[0].points.length > 0) {
-    const bounds = tracks[0].points.reduce(
-      (bounds, point) => bounds.extend(point.lonLat),
-      new mapboxgl.LngLatBounds(tracks[0].points[0].lonLat, tracks[0].points[0].lonLat),
-    );
-    map.fitBounds(bounds, { padding: 20 });
-  }
+  if (tracks.length === 0 || tracks[0].points.length === 0) return;
+
+  const bounds = tracks.reduce(
+    (bounds, track) =>
+      track.points.reduce((trackBounds, point) => trackBounds.extend(point.lonLat), bounds),
+    new mapboxgl.LngLatBounds(tracks[0].points[0].lonLat, tracks[0].points[0].lonLat),
+  );
+  map.fitBounds(bounds, { padding: 20 });
 };
 
 export const applyCompletedTracks = (

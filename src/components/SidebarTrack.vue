@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Track } from '@/model/Track.ts';
 import { computed } from 'vue';
+import MaterialIcon from '@/components/MaterialIcon.vue';
 
 const { track, initials } = defineProps<{
   track: Track;
@@ -8,7 +9,10 @@ const { track, initials } = defineProps<{
   iconSvg?: string;
 }>();
 
-const emit = defineEmits<(e: 'rename', newInitials: string) => void>();
+const emit = defineEmits<{
+  (e: 'rename', newInitials: string): void;
+  (e: 'delete'): void;
+}>();
 
 const duration = computed(() => {
   const totalSeconds = track.duration.total;
@@ -48,6 +52,9 @@ function rename() {
     <div :class="$style.nameRow">
       <div v-if="iconSvg" :class="$style.initials" v-html="iconSvg" @dblclick="rename"></div>
       <h3>{{ track.name }}</h3>
+      <div :class="$style.deleteButton">
+        <MaterialIcon inline @click="$emit('delete')">delete</MaterialIcon>
+      </div>
     </div>
     <p>{{ timeRange }}<br />({{ duration }})</p>
   </li>
@@ -67,6 +74,16 @@ function rename() {
     background: inherit;
     margin: 0;
     padding: 0.25em 0;
+    flex: 1;
+  }
+}
+
+.deleteButton {
+  cursor: default;
+  color: var(--color-weak);
+
+  &:hover {
+    color: var(--color-error);
   }
 }
 
